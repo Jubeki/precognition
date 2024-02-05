@@ -2,6 +2,7 @@ import { Config, NamedInputEvent, RequestMethod, SimpleValidationErrors, toSimpl
 import { useForm as usePrecognitiveForm, client } from 'laravel-precognition-vue'
 import { useForm as useInertiaForm } from '@inertiajs/vue3'
 import { watchEffect } from 'vue'
+import {isAxiosError} from 'axios'
 
 export { client }
 
@@ -98,12 +99,33 @@ export const useForm = <Data extends Record<string, unknown>>(method: RequestMet
 
             return form
         },
-        validate(name?: string|NamedInputEvent) {
+        validate(name?: string|NamedInputEvent|ValidationConfig, config?: ValidationConfig) {
+            if (typeof name === 'object' && !('target' in name)) {
+                config = name
+                name = undefined
+            }
+
             precognitiveForm.setData(inertiaForm.data())
 
-            precognitiveForm.validate(name)
+            // @ts-expect-error
+            if (typeof config === 'object' && config.onError) {
+                // TODO shoult this decorate?
+                // @ts-expect-error
+                config.onValidationError = config.onValidationError ?? config?.onError
+            }
 
-            return form
+            precognitiveForm.validate(name, config).catch((e) => {
+                // Unlike other status codes, 422 responses are expected and
+                // constant behaviour for Precognition requests.  Although
+                // slightly inconsistent with other response codes, we will
+                // silently ignore these. They should be intercepted by the
+                // `onError` or `onValidationError` config option.
+                if (isAxiosError(e) && e.response?.status === 422) {
+                    return
+                }
+
+                throw e
+            })
         },
         setValidationTimeout(duration: number) {
             precognitiveForm.setValidationTimeout(duration)
