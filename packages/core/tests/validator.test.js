@@ -148,6 +148,7 @@ it('triggers errorsChanged event when setting errors', () => {
         name: 'Tim',
     })
     let triggered = 0
+
     validator.on('errorsChanged', () => triggered++)
 
     validator.setErrors({
@@ -452,7 +453,7 @@ it('can validate without needing to specify a field', async () => {
     expect.assertions(1)
 
     let requests = 0
-    axios.request.mockImplementation(async () => {
+    axios.request.mockImplementation(() => {
         requests++
 
         return Promise.resolve(precognitionSuccessResponse())
@@ -462,7 +463,8 @@ it('can validate without needing to specify a field', async () => {
 
     validator.touch(['name', 'framework']).validate()
     expect(requests).toBe(1)
-    await vi.advanceTimersByTimeAsync(1500)
+
+    await assertPendingValidateDebounceAndClear()
 })
 
 it('marks fields as valid on precognition success', async () => {
