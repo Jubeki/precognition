@@ -369,7 +369,6 @@ it('doesnt mark fields as validated on error status', async () => {
     expect(validator.valid()).toEqual([])
 
     axios.isAxiosError.mockReturnValue(true)
-    console.log(precognitionFailedResponse({ status: 401 }))
     rejector(precognitionFailedResponse({ status: 401 }))
     await vi.advanceTimersByTimeAsync(1500)
 
@@ -467,25 +466,29 @@ it('can validate without needing to specify a field', async () => {
 })
 
 it('marks fields as valid on precognition success', async () => {
-    expect.assertions(4)
+    expect.assertions(5)
 
     let requests = 0
-    let data = { name: 'Tim' }
-    axios.request.mockImplementation(async () => {
+    axios.request.mockImplementation(() => {
         requests++
 
-        return precognitionSuccessResponse()
+        return Promise.resolve(precognitionSuccessResponse())
     })
-    const validator = createValidator(client => client.post('/users', data))
+    const validator = createValidator((client) => client.post('/foo', {}))
+    let valid = null
+    validator.setErrors({name: 'Required'}).touch('name').on('errorsChanged', () => {
+        valid = validator.valid()
+    })
 
-    expect(validator.valid()).toEqual([])
+    expect(validator.valid()).toStrictEqual([])
+    expect(valid).toBeNull()
 
-    await validator.touch('name').validate()
+    validator.validate()
+    await vi.advanceTimersByTimeAsync(1500)
 
     expect(requests).toBe(1)
-    expect(validator.valid()).toEqual(['name'])
-
-    assertPendingValidateDebounceAndClear()
+    expect(validator.valid()).toStrictEqual(['name'])
+    expect(valid).toStrictEqual(['name'])
 })
 
 it('can access the response object via the promise returned from validate', async () => {
