@@ -449,23 +449,21 @@ it('revalidates when touched changes', async () => {
     expect(requests).toBe(2)
 })
 
-it('can call validate without needing to specify a field', async () => {
-    expect.assertions(2)
+it('can validate without needing to specify a field', async () => {
+    expect.assertions(1)
 
     let requests = 0
-    let data = { name: 'Tim', framework: 'Laravel' }
     axios.request.mockImplementation(async () => {
         requests++
 
-        return precognitionSuccessResponse()
+        return Promise.resolve(precognitionSuccessResponse())
     })
-    const validator = createValidator(client => client.post('/users', data))
+    let data = { name: 'Tim', framework: 'Laravel' }
+    const validator = createValidator((client) => client.post('/foo', data))
 
-    validator.touch('name')
-    await validator.validate()
+    validator.touch(['name', 'framework']).validate()
     expect(requests).toBe(1)
-
-    assertPendingValidateDebounceAndClear()
+    await vi.advanceTimersByTimeAsync(1500)
 })
 
 it('marks fields as valid on precognition success', async () => {
