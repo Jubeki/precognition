@@ -450,7 +450,7 @@ it('revalidates when touched changes', async () => {
 })
 
 it('can validate without needing to specify a field', async () => {
-    expect.assertions(1)
+    expect.assertions(2)
 
     let requests = 0
     axios.request.mockImplementation(() => {
@@ -493,95 +493,76 @@ it('marks fields as valid on precognition success', async () => {
     expect(valid).toStrictEqual(['name'])
 })
 
-it('can access the response object via the promise returned from validate', async () => {
-    expect.assertions(2)
-
-    let data = { name: 'Tim' }
+it('calls locally configured onSuccess handler', async () => {
+    let response = null
     axios.request.mockImplementation(async () => precognitionSuccessResponse({ data: 'response-data' }))
-    const validator = createValidator(client => client.post('/users', data))
+    const validator = createValidator(client => client.post('/users', {}))
 
-    const response = await validator.validate('name', data.name)
+    validator.validate('name', 'Tim', {
+        onSuccess: (r) => response = r,
+    })
+    await vi.advanceTimersByTimeAsync(1500)
 
     expect(response.data).toBe('response-data')
-
-    assertPendingValidateDebounceAndClear()
 })
 
-it('calls user configured onSuccess handlers', async () => {
-    expect.assertions(2)
-
-    let data = { name: 'Tim' }
+it('calls globally configured onSuccess handler', async () => {
+    let response = null
     axios.request.mockImplementation(async () => precognitionSuccessResponse({ data: 'response-data' }))
-    const validator = createValidator(client => client.post('/users', data, {
-        onSuccess: response => response.data+':global-handler',
+    const validator = createValidator(client => client.post('/users', {}, {
+        onSuccess: (r) => response = r
     }))
 
-    const response = await validator.validate('name', data.name)
+    validator.validate('name', 'Tim')
+    await vi.advanceTimersByTimeAsync(1500)
 
-    expect(response).toBe('response-data:global-handler')
-
-    assertPendingValidateDebounceAndClear()
+    expect(response.data).toBe('response-data')
 })
 
-it('can pass config to individual validate calls', async () => {
-    expect.assertions(2)
-
-    let data = { name: 'Tim' }
-    axios.request.mockImplementation(async () => precognitionSuccessResponse({ data: 'response-data' }))
-    const validator = createValidator(client => client.post('/users', data, {
-        onPrecognitionSuccess: response => response.data+':global-handler',
-    }))
-
-    const response = await validator.validate('name', data.name, {
-        onPrecognitionSuccess: response => response.data+':local-handler',
-    })
-
-    expect(response).toBe('response-data:local-handler')
-
-    assertPendingValidateDebounceAndClear()
-})
-
-it('can pass config to individual validate calls without specifying input values', async () => {
-    expect.assertions(2)
-
+it('local config overrides global config', async () => {
+    let response
     axios.request.mockImplementation(async () => precognitionSuccessResponse({ data: 'response-data' }))
     const validator = createValidator(client => client.post('/users', { name: 'Tim' }, {
-        onPrecognitionSuccess: response => response.data+':global-handler',
+        onPrecognitionSuccess: (r) => {
+            r.data = r.data+':global-handler'
+            response = r
+        },
     }))
     validator.touch('name')
 
-    const response = await validator.validate({
-        onPrecognitionSuccess: response => response.data+':local-handler',
+    validator.validate({
+        onPrecognitionSuccess: (r) => {
+            r.data = r.data+':local-handler'
+
+            response = r
+        }
     })
+    await vi.advanceTimersByTimeAsync(1500)
 
-    expect(response).toBe('response-data:local-handler')
-
-    assertPendingValidateDebounceAndClear()
+    expect(response.data).toBe('response-data:local-handler')
 })
 
 it('correctly merges axios config', async () => {
-    expect.assertions(2)
-
-    let data = { name: 'Tim' }
     let config = null
-    axios.request.mockImplementationOnce(async c => {
+    axios.request.mockImplementation(async c => {
         config = c
 
         return precognitionSuccessResponse()
     })
-    const validator = createValidator(client => client.post('/users', data, {
+    const validator = createValidator(client => client.post('/users', {}, {
         headers: {
             'X-Global': '1',
             'X-Both': ['global'],
         },
     }))
 
-    await validator.validate('name', data.name, {
+    validator.validate('name', 'Tim', {
         headers: {
             'X-Local': '1',
             'X-Both': ['local'],
         },
     })
+    await vi.advanceTimersByTimeAsync(1500)
 
     expect(config.headers).toEqual({
         'X-Global': '1',
@@ -592,7 +573,5 @@ it('correctly merges axios config', async () => {
         Precognition: true,
         'Precognition-Validate-Only': 'name',
     })
-
-    assertPendingValidateDebounceAndClear()
 })
 
