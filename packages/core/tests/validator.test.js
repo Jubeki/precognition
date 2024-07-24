@@ -32,7 +32,22 @@ const assertPendingValidateDebounceAndClear = async () => {
 }
 
 beforeEach(() => {
-    vi.mock('axios')
+    vi.mock('axios', async () => {
+        const axios = await vi.importActual('axios')
+
+        const isAxiosError = (value) => typeof value === 'object' && typeof value.response === 'object' && value.response.status >= 400
+
+        return {
+            ...axios,
+            isAxiosError,
+            default: {
+                ...axios.default,
+                request: vi.fn(),
+                isAxiosError,
+            }
+        }
+    })
+
     vi.useFakeTimers()
     client.use(axios)
 })
@@ -337,7 +352,6 @@ it('doesnt mark fields as validated while response is pending',  async () => {
     validator.validate('version', '10')
     expect(validator.valid()).toEqual(['app'])
 
-    axios.isAxiosError.mockReturnValue(true)
     rejector(precognitionFailedResponse())
     await vi.advanceTimersByTimeAsync(1500)
     expect(validator.valid()).toEqual(['app', 'version'])
@@ -369,7 +383,6 @@ it('doesnt mark fields as validated on error status', async () => {
     })
     expect(validator.valid()).toEqual([])
 
-    axios.isAxiosError.mockReturnValue(true)
     rejector(precognitionFailedResponse({ status: 401 }))
     await vi.advanceTimersByTimeAsync(1500)
 
